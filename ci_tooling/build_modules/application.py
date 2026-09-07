@@ -238,9 +238,9 @@ class GenerateApplication:
         resources_dir = self._application_output / "Contents" / "Resources"
         resources_dir.mkdir(parents=True, exist_ok=True)
 
-        for file in Path("payloads/Resources/AppIcons").glob("*.icns"):
+        for file in Path("payloads/Resources/AppIcons"):
             subprocess_wrapper.run_and_verify(
-                generate_copy_arguments(str(file), resources_dir),
+                generate_copy_arguments(str(file), resources_dir / ""),
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
 
