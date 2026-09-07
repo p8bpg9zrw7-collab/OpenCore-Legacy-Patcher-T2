@@ -10,6 +10,7 @@ import logging
 import subprocess
 import Security
 import os
+import sys
 
 from pathlib import Path
 from typing import Callable, Optional
@@ -102,7 +103,7 @@ def repair_privileged_helper_permissions() -> bool:
                 0
             ),
         )
-        prompt = b"OpenCore Legacy Patcher needs administrator permission to repair the permissions of its privileged helper tool."
+        prompt = b"OpenCore Legacy Patcher T2 needs administrator permission to repair the permissions of its privileged helper tool."
 
         environment = (
             Security.AuthorizationItem(
