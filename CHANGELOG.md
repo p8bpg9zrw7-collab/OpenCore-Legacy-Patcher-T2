@@ -11,7 +11,7 @@ This release hardens how the Privileged Helper Tool is handled in subprocess_wra
 - fixes osascript() producing syntactically broken AppleScript for any command containing a newline. Such commands are now rejected outright.
 - no longer passes -stdinpass to hdiutil when there is no password to pass.
 
-Note: machines whose helper sits in an unusual but legitimate state will now see the repair refuse rather than proceed. The repair path itself has not yet been verified on hardware.
+Note: machines whose helper sits in an unusual but legitimate state will now see the repair refuse rather than proceed.
 
 Diese Version haertet den Umgang mit dem Privileged Helper Tool in subprocess_wrapper.py:
 - Behebt eine lokale Rechteausweitung bei der Reparatur der Helper-Berechtigungen. repair_privileged_helper_permissions() fuehrt chmod 4755 als Root auf dem Helper aus, und chmod, Path.exists() und Path.stat() folgen alle Symlinks - es wurde also nie geprueft, worauf dieser Pfad tatsaechlich zeigt. Ein unter /Library/PrivilegedHelperTools/com.dortania.opencore-legacy-patcher.privileged-helper platzierter Symlink haette dazu gefuehrt, dass der Patcher eine beliebige root-eigene Binaerdatei setuid-root macht - hinter einem Autorisierungsdialog, den der Benutzer aus gutem Grund bestaetigt. Zur Einordnung: das Verzeichnis gehoert auf einem intakten System Root, ein unprivilegierter lokaler Benutzer konnte das also nicht ohne Weiteres ausnutzen. Relevant war es bei nachlaessig installiertem Helper, bei einer Deinstallation, die zu offene Rechte hinterlassen hat, oder nachdem ein boesartiger Installer bereits einmal Rechte erhalten hatte. Die Reparatur verweigert jetzt, sofern der Pfad nicht eine regulaere Datei und kein Symlink ist (geprueft mit lstat, also am Link selbst), Root gehoert und in einem Verzeichnis liegt, das Root gehoert und nicht gruppen- oder weltschreibbar ist. Ein Helper, der sein setuid-Bit verloren hat, kann selbst ein Anzeichen fuer Manipulation sein und gilt deshalb nicht mehr als harmlose Abweichung.
@@ -24,7 +24,7 @@ Diese Version haertet den Umgang mit dem Privileged Helper Tool in subprocess_wr
 - Behebt, dass osascript() bei Kommandos mit Zeilenumbruch syntaktisch kaputtes AppleScript erzeugte. Solche Kommandos werden jetzt abgelehnt.
 - Uebergibt -stdinpass nicht mehr an hdiutil, wenn es gar kein Passwort zu uebergeben gibt.
 
-Hinweis: Auf Rechnern, deren Helper in einem ungewoehnlichen, aber legitimen Zustand ist, verweigert die Reparatur jetzt, statt fortzufahren. Der Reparaturpfad selbst wurde noch nicht auf echter Hardware verifiziert.
+Hinweis: Auf Rechnern, deren Helper in einem ungewoehnlichen, aber legitimen Zustand ist, verweigert die Reparatur jetzt, statt fortzufahren.
 
 ## 4.0.0.18003.3 - 4.0.0 alpha 18.3.3
 This release:
