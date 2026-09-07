@@ -138,7 +138,11 @@ class GenerateApplication:
         with open(_file, "rb") as f:
             data = f.read()
             
-        data = data.replace(_find, _replace)
+        # Bounded to the first match, like _patch_load_command() above. The load command
+        # lives once in the Mach-O header at the front of the file, but this is a 4-byte
+        # sequence that recurs by chance across a multi-megabyte binary full of embedded
+        # bytecode - an unbounded replace() silently rewrote those unrelated hits too.
+        data = data.replace(_find, _replace, 1)
 
         with open(_file, "wb") as f:
             f.write(data)

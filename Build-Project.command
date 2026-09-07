@@ -9,6 +9,7 @@ import re
 import sys
 import time
 import argparse
+import traceback
 import subprocess
 from pathlib import Path
 
@@ -33,7 +34,7 @@ def check_file_exists(path: Path) -> None:
 
 def available_codesigning_identities() -> list:
     """
-    Return (SHA-1 hash, name) for every valid code signing identity in the keychain
+    Return (SHA-1 hash, name, status) for every valid code signing identity in the keychain
 
     'security find-identity -v' already filters out expired or otherwise unusable
     certificates. A self signed "Code Signing" certificate made in Keychain Access shows
@@ -68,7 +69,7 @@ def available_codesigning_identities() -> list:
     return identities
 
 
-def resolve_application_identity(requested: str, auto_detect: bool) -> str:
+def resolve_application_identity(requested: str, auto_detect: bool) -> "str | None":
     """
     Decide which identity the app and the privileged helper tool get signed with
 
@@ -123,7 +124,7 @@ def resolve_application_identity(requested: str, auto_detect: bool) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build OpenCore Legacy Patcher Suite", add_help=False)
+    parser = argparse.ArgumentParser(description="Build OpenCore Legacy Patcher Suite")
 
     # Signing & Notarization
     parser.add_argument("--application-signing-identity", type=str, help="Application Signing Identity")
@@ -204,7 +205,9 @@ def main() -> None:
             print("--- Build packages ---")
             package.GeneratePackage().generate()
             
-            for pkg in ["OpenCore-Patcher-T2.pkg", "OpenCore-Patcher-Uninstaller.pkg"]:
+            # AutoPkg-Assets-T2.pkg is installed by the app itself during auto patching,
+            # so it needs a signature just as much as the two user facing packages.
+            for pkg in ["OpenCore-Patcher-T2.pkg", "OpenCore-Patcher-Uninstaller.pkg", "AutoPkg-Assets-T2.pkg"]:
                 pkg_path = Path(f"dist/{pkg}")
                 check_file_exists(pkg_path)
                 print(f"--- Signiere {pkg} ---")
@@ -220,6 +223,9 @@ def main() -> None:
     except Exception as e:
         print(f"\n[!] Das Aufbauen des Apps hat abgebrochen aufgrund eines Fehlers: {e}")
         print(f"\n[!] Building the app stopped because of some error: {e}")
+        # Print the traceback too. Without it the message alone gives no file or line,
+        # which turns any error raised deep in a build module into a repo-wide hunt.
+        traceback.print_exc()
         sys.exit(3)
 
 if __name__ == '__main__':
