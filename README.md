@@ -1,3 +1,5 @@
+https://www.whatismybrowser.com/
+
 <div align="center">
   <img
     src="https://raw.githubusercontent.com/dortania/OpenCore-Legacy-Patcher/macos-next/docs/images/OC-Patcher.png"
