@@ -1,5 +1,9 @@
 <div align="center">
-  <img src="https://github.com/dortania/OpenCore-Legacy-Patcher/blob/macos-next/docs/images/OC-Patcher.png" alt="OpenCore Patcher Logo" width="200" />
+  <img
+    src="https://raw.githubusercontent.com/dortania/OpenCore-Legacy-Patcher/macos-next/docs/images/OC-Patcher.png"
+    alt="OpenCore Patcher T2 Logo"
+    width="200"
+  />
   <h1>OpenCore Legacy Patcher — T1 & T2 macOS Tahoe Edition</h1>
   <p><b>Developed & Maintained by <a href="https://github.com/albert-mueller">albert-mueller (Albert Müller)</a> with community contributions</b></p>
   <p><i>Restoring full graphics acceleration, Broadcom Wi-Fi, audio routing, and T1/T2 security on macOS 26 Tahoe & macOS 15 Sequoia</i></p>
@@ -23,6 +27,7 @@ A Python-based project revolving around [Acidanthera's OpenCorePkg](https://gith
 Security researchers can report vulnerabilities in the app via GitHub Security advisories.
 
 ⚠️ Attention! Macs with Intel Core 2 Duos:
+
 - 2010 11 inch and 13 inch MacBook Air
 - 2010 MacBook Pro
 - 2010 Mac mini
