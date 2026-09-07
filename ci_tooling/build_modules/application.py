@@ -238,9 +238,23 @@ class GenerateApplication:
         resources_dir = self._application_output / "Contents" / "Resources"
         resources_dir.mkdir(parents=True, exist_ok=True)
 
-        for file in Path("payloads/Resources/AppIcons"):
+        app_icons_dir = Path("payloads/Resources/AppIcons")
+        if not app_icons_dir.is_dir():
+            raise FileNotFoundError(f"AppIcons directory not found: {app_icons_dir}")
+
+        # Iterate the directory's entries - a Path is not itself iterable, which is
+        # where "'PosixPath' object is not iterable" came from.
+        #
+        # Copy everything in here rather than filtering on *.icns. OC-Patcher.png
+        # backs constants.app_icon_path_png, which embed_readme() rewrites the
+        # README's image URL to point at, and Assets.car is what hands macOS the app
+        # icon the same way Apple's own apps do. An extension filter silently drops
+        # both and the failure only shows up at runtime.
+        for file in sorted(app_icons_dir.iterdir()):
+            if file.name.startswith("."):
+                continue
             subprocess_wrapper.run_and_verify(
-                generate_copy_arguments(str(file), resources_dir / ""),
+                generate_copy_arguments(str(file), str(resources_dir)),
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
 
