@@ -123,11 +123,6 @@ class MainFrame(wx.Frame):
                     "description": ["App settings"],
                     "icon": str(self.constants.icns_resource_path / "Settings.icns"),
                 },
-                "Check for updates": {
-                    "function": self.on_check_for_updates,
-                    "description": ["Checks for updates so you have the", "latest features and bug fixes."],
-                    "icon": str(self.constants.icns_resource_path / "Settings.icns"),
-                },
                 "Create macOS Installer": {
                     "function": self.on_create_macos_installer,
                     "description": ["Download and flash a macOS", "Installer for your system."],
@@ -399,30 +394,6 @@ class MainFrame(wx.Frame):
             self._report_manual_check(manual, str(remote_version_str), None)
             wx.CallAfter(self.on_update, update_dict["Link"], remote_version_str, update_dict["Github Link"], changelog)
         
-    def on_check_for_updates(self, event: wx.Event = None) -> None:
-        """
-        Manual "Check for updates" button.
-
-        Unlike the startup check this ignores constants.has_checked_updates and
-        always reports back - a user who clicks the button gets an answer even
-        when there is nothing new. Runs on a worker thread so the GitHub request
-        cannot freeze the GUI.
-        """
-        thread = getattr(self, "update_thread", None)
-        if thread is not None and thread.is_alive():
-            logging.info("An update check is already running.")
-            return
-
-        button = getattr(self, "update_button", None)
-        if button is not None:
-            button.SetLabel("Checking...")
-            button.Disable()
-
-        self.update_thread = threading.Thread(target=self._check_for_updates, kwargs={"manual": True})
-        self.update_thread.daemon = True
-        self.update_thread.start()
-        self.constants.update_thread = self.update_thread
-
     def _report_manual_check(self, manual: bool, new_version, error) -> None:
         """
         Hand the result of a manual check back to the main thread. No-op for the
