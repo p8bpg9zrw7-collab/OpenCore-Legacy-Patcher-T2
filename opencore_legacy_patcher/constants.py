@@ -817,6 +817,10 @@ class Constants:
         return self.payload_path / Path("Resources/AppIcons/OC-Patcher.icns")
 
     @property
+    def app_icon_path_png(self):
+        return self.payload_path / Path("Resources/AppIcons/OC-Patcher.png")
+
+    @property
     def icon_path_external(self):
         return self.payload_path / Path("Resources/DriveIcons/External/.VolumeIcon.icns")
 

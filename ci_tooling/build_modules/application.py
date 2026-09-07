@@ -111,7 +111,6 @@ class GenerateApplication:
 
         print("Patching LC_VERSION_MIN_MACOSX")
         if not _file.exists():
-            raise FileNotFoundError(f"Zieldatei zum Patchen nicht gefunden: {_file}")
             raise FileNotFoundError(f"Target binary not found for patching: {_file}")
 
         with open(_file, "rb") as f:
@@ -134,7 +133,6 @@ class GenerateApplication:
 
         print("Patching LC_BUILD_VERSION")
         if not _file.exists():
-            raise FileNotFoundError(f"Zieldatei zum Patchen nicht gefunden: {_file}")
             raise FileNotFoundError(f"Target binary not found for patching: {_file}")
 
         with open(_file, "rb") as f:
@@ -217,7 +215,6 @@ class GenerateApplication:
 
         print("Embedding git data")
         if not _file.exists():
-            raise FileNotFoundError(f"Info.plist nicht gefunden: {_file}")
             raise FileNotFoundError(f"Info.plist not found: {_file}")
 
         with open(_file, "rb") as f:
@@ -241,23 +238,93 @@ class GenerateApplication:
         resources_dir = self._application_output / "Contents" / "Resources"
         resources_dir.mkdir(parents=True, exist_ok=True)
 
-        for file in Path("payloads/Resources/AppIcons").glob("*.icns"):
+        for file in Path("payloads/Resources/AppIcons"):
             subprocess_wrapper.run_and_verify(
                 generate_copy_arguments(str(file), resources_dir / ""),
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
 
 
+
+
+    def embed_readme(self) -> str:
+        """
+        Embed README into the about frame logic for the application build.
+        """
+        repository_root = Path(__file__).resolve().parents[2]
+        readme_file = repository_root / "README.md"
+        about_file_path = repository_root / "opencore_legacy_patcher" / "wx_gui" / "gui_about.py"
+        if not readme_file.exists():
+            raise FileNotFoundError(f"README.md not found: {readme_file}")
+        if not about_file_path.exists():
+            raise FileNotFoundError(f"About frame source not found: {about_file_path}")
+
+        with open(readme_file, "r", encoding="utf-8") as f:
+            readme_text = f.read()
+        with open(about_file_path, "r", encoding="utf-8") as f:
+            about_file = f.read()
+
+        image_url = "https://raw.githubusercontent.com/dortania/OpenCore-Legacy-Patcher/macos-next/docs/images/OC-Patcher.png"
+        source_line = "markdown_text = Path(\"./README.md\").read_text(encoding=\"utf-8\")"
+        replacement = (
+            f"markdown_text = {repr(readme_text)}\n"
+            f"        markdown_text = markdown_text.replace({image_url!r}, "
+            "Path(self.constants.app_icon_path_png).resolve().as_uri())"
+        )
+        if source_line not in about_file:
+            raise RuntimeError("README loading statement not found in gui_about.py")
+
+        modified_about = about_file.replace(source_line, replacement, 1)
+        if "import wx.html2" not in modified_about:
+            modified_about = modified_about.replace("import wx\n", "import wx\nimport wx.html2\n", 1)
+
+        source_base_url = 'base_url = Path("./README.md").resolve().parent.as_uri() + "/"'
+        packaged_base_url = 'base_url = Path(self.constants.app_icon_path_png).resolve().parent.as_uri() + "/"'
+        if source_base_url in modified_about:
+            modified_about = modified_about.replace(source_base_url, packaged_base_url, 1)
+        elif packaged_base_url not in modified_about:
+            marker = "        self.webview.SetPage(html_document)"
+            if marker in modified_about:
+                modified_about = modified_about.replace(
+                    marker,
+                    f"        {packaged_base_url}\n\n{marker}",
+                    1,
+                )
+
+        modified_about = modified_about.replace(
+            "self.webview.SetPage(html_document)",
+            "self.webview.SetPage(html_document, base_url)",
+            1,
+        )
+
+        with open(about_file_path, "w", encoding="utf-8") as f:
+            f.write(modified_about)
+
+        return about_file
+
+    def remove_hard_readme(self, about_file: str) -> None:
+        """
+        Remove hardcoded README from the about frame logic
+        """
+        repository_root = Path(__file__).resolve().parents[2]
+        about_file_path = repository_root / "opencore_legacy_patcher" / "wx_gui" / "gui_about.py"
+        with open(about_file_path, "w", encoding="utf-8") as f:
+            f.write(about_file)
+        
     def generate(self) -> None:
         """
         Generate OpenCore-Patcher-T2.app
         """
+        about_file = None
         try:
             self._embed_analytics_key()
+            about_file = self.embed_readme()
             self._generate_application()
         finally:
             # Always sanitizes the local source code file even if the build crashes
             self._remove_analytics_key()
+            if about_file is not None:
+                self.remove_hard_readme(about_file=about_file)
 
         self._patch_load_command()
         
