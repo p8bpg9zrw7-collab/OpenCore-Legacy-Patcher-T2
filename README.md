@@ -12,7 +12,6 @@
 ---
 
 ### 👑 Authorship & Contributions
-https://www.whatismybrowser.com/
 This repository is the dedicated development fork led by **albert-mueller (Albert Müller)**. While building upon work by Dortania, Acidanthera, and Albert Müller, this fork independently engineered the critical solutions that make macOS 26 Tahoe fully usable on legacy and T1/T2 hardware:
 
 1. **T1 Security & Native Login**: Engineered the Native Software Keystore login flow on macOS Tahoe for `MacBookPro14,1`, `MacBookPro14,2`, and `MacBookPro14,3` (retaining Apple ID/iCloud, resolving Keychain panics).
