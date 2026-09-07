@@ -814,11 +814,11 @@ class Constants:
        
     @property
     def app_icon_path(self):
-        return self.payload_path / Path("Resources/AppIcons/OC-Patcher.icns")
+        return self.icns_resource_path / Path("OC-Patcher.icns")
 
     @property
     def app_icon_path_png(self):
-        return self.payload_path / Path("Resources/AppIcons/OC-Patcher.png")
+        return self.icns_resource_path / Path("OC-Patcher.png")
 
     @property
     def icon_path_external(self):
