@@ -1,4 +1,6 @@
 # OpenCore Legacy Patcher T2 changelog / OpenCore Legacy Patcher T2-Änderungsprotokoll
+## 4.0.0.18003.7 - 4.0.0 alpha 18.3.7
+
 ## 4.0.0.18003.3 - 4.0.0 alpha 18.3.3
 This release:
 - fixes an issue where upon trying to install root patches in Developer Mode, a popup appears in Italian instead of English. The thing is that most people don't understand or speak Italian, and if they are lucky to understand what it says, it may be because they speak French or Spanish (I speak a little bit of French), both of which have similarities with Italian. I speak Bulgarian, German, English and a little bit of French. I can understand also Luxembourgish and a little bit of Dutch, which both are similar to German. A popup like this was appearing when in Developer Mode:
