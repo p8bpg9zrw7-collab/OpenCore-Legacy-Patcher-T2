@@ -1,4 +1,37 @@
 # OpenCore Legacy Patcher T2 changelog / OpenCore Legacy Patcher T2-Änderungsprotokoll
+## 4.0.0.18003.9 - 4.0.0 alpha 18.3.9
+This release:
+- fixes CI/CD bugs that may cause unexpected issues after the app is built that may not exist when running from source
+- fixes a bug where the patcher may not include jpeg and other images inside the patcher itself, which was again related to CI/CD pipeline bugs
+<img width="1224" height="1424" alt="image" src="https://github.com/user-attachments/assets/ce0d52be-e75b-4d86-8c9b-1b702cb7be4e" />
+Now with the bug fixed, now it looks like this:
+<img width="1224" height="1424" alt="image" src="https://github.com/user-attachments/assets/992d0c4c-9bd4-4552-867a-3ee7fd76ac54" />
+
+Diese Version:
+
+- Behebt CI/CD-Fehler, die nach dem Build der Anwendung unerwartete Probleme verursachen konnten, die beim Ausführen aus dem Quellcode möglicherweise nicht auftraten.
+
+- Behebt einen Fehler, der dazu führte, dass der Patcher JPEG- und andere Bilder nicht in den Patcher selbst einbinden konnte. Dieser Fehler stand ebenfalls im Zusammenhang mit Fehlern in der CI/CD-Pipeline.
+<img width="1224" height="1424" alt="image" src="https://github.com/user-attachments/assets/ce0d52be-e75b-4d86-8c9b-1b702cb7be4e" />
+
+Jetzt mit den Fehler behoben, es sieht so aus:
+<img width="1224" height="1424" alt="image" src="https://github.com/user-attachments/assets/eb0ea3e4-dac8-40aa-ad9a-d387e6732620" />
+
+
+## 4.0.0.18003.8 - 4.0.0 alpha 18.3.8
+This release:
+- fixes this CI/CD bug when building the app that throws the following error: 'PosixPath' object is not iterable
+- removes unused imports in OpenCore-GUI.command, this mostly affects developers
+- the About section now opens a local README file stored inside the app
+
+Diese Version:
+
+- Behebt einen CI/CD-Fehler beim Erstellen der App, der folgenden Fehler auslöst: 'PosixPath' object is not iterable
+
+- Entfernt ungenutzte Importe in OpenCore-GUI.command; dies betrifft hauptsächlich Entwickler.
+
+- Der Abschnitt „Über“ öffnet nun eine lokale README-Datei innerhalb der App.
+
 ## 4.0.0.18003.7 - 4.0.0 alpha 18.3.7
 This release hardens how the Privileged Helper Tool is handled in subprocess_wrapper.py:
 - fixes a local privilege escalation in the helper permission repair. repair_privileged_helper_permissions() runs chmod 4755 on the helper as root, and chmod, Path.exists() and Path.stat() all follow symlinks, so nothing checked what that path actually pointed at. A symlink planted at /Library/PrivilegedHelperTools/com.dortania.opencore-legacy-patcher.privileged-helper would have made the patcher mark an arbitrary root-owned binary setuid-root, behind an authorization prompt the user has every reason to approve. To be clear about the severity: that directory is root-owned on a healthy system, so this was not exploitable by an unprivileged local user out of the box. It mattered where the helper had been installed sloppily, where a botched uninstall left loose permissions, or after a malicious installer had already obtained one elevation. The repair now refuses unless the path is a regular file and not a symlink (checked with lstat, so the link itself is inspected), is owned by root, and sits in a directory that is root-owned and not group- or world-writable. A helper that has lost its setuid bit can itself be a sign of tampering, so this case is no longer treated as harmless drift.
