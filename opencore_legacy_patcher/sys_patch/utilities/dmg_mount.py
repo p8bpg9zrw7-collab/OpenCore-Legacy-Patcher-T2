@@ -46,6 +46,43 @@ class PatcherSupportPkgMount:
             retry_on_auth_error=retry_on_auth_error
         )
 
+    def _is_encrypted(self, dmg_path: Path) -> bool:
+        """Whether hdiutil considers the image encrypted, ie. whether it will prompt for a passphrase at all.
+
+        Deliberately fail-open: if the check cannot be run or its wording changes,
+        assume encrypted and show the notice. A superfluous notice is harmless,
+        a missing one leaves the user staring at an unanswerable system prompt.
+        """
+        try:
+            result = subprocess.run(
+                ["/usr/bin/hdiutil", "isencrypted", str(dmg_path)],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30
+            )
+        except Exception:
+            return True
+        output = result.stdout.decode(errors="ignore").lower()
+        # hdiutil has printed both "encrypted: YES/NO" and "encrypted: 1/0" across releases.
+        return not ("encrypted: no" in output or "encrypted: 0" in output)
+
+    def _display_universal_binaries_password_notice(self) -> None:
+        """Heads-up dialog shown before hdiutil's own passphrase prompt.
+
+        Universal-Binaries.dmg is encrypted with a fixed passphrase that ships with
+        the Patcher - it is not a secret. hdiutil asks for it through a bare macOS
+        system prompt that names only the disk image and gives no indication of what
+        to type, which reads like an unexplained password request in the middle of
+        root patching. State the passphrase ourselves beforehand so the prompt is
+        answerable.
+        """
+        if self.constants.cli_mode is True:
+            return
+        try:
+            applescript.AppleScript(
+                f'display dialog "OpenCore Legacy Patcher is about to mount Universal-Binaries.dmg.\\n\\nmacOS will ask for the password of this disk image. The password is:\\n\\npassword" buttons {{"OK"}} default button "OK" with title "OpenCore Legacy Patcher" with icon file "{self.icon_path}"'
+            ).run()
+        except Exception:
+            logging.info("- Failed to display Universal-Binaries.dmg password notice")
+
     def _mount_universal_binaries_dmg(self) -> bool:
         """Mount PatcherSupportPkg's Universal-Binaries.dmg"""
         dmg_path = Path(self.constants.payload_local_binaries_root_path_dmg)
@@ -53,6 +90,9 @@ class PatcherSupportPkgMount:
             logging.error("- PatcherSupportPkg resources missing, Patcher likely corrupted!!!")
             logging.exception("Stack Trace:")
             return False
+
+        if self._is_encrypted(dmg_path):
+            self._display_universal_binaries_password_notice()
 
         output = self._run_hdiutil(
             dmg_path,
