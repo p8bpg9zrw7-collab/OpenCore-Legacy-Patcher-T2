@@ -5,6 +5,7 @@ package.py: Generate packages (Installer, Uninstaller, AutoPkg-Assets)
 import tempfile
 import macos_pkg_builder
 import plistlib
+import rich
 from pathlib import Path
 
 def _patched_generate_component_file(self) -> Path:
@@ -141,7 +142,7 @@ class GeneratePackage:
         turning a failed build into a silent success - and gave no indication of
         which of the three packages actually failed when it did fire.
         """
-        print(f"Generating {name}")
+        rich.print(f"Generating {name}")
         if macos_pkg_builder.Packages(**kwargs).build() is not True:
             raise RuntimeError(f"Failed to build {name}")
 

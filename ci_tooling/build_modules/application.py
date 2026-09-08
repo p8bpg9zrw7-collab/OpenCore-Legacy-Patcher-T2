@@ -3,6 +3,7 @@ import time
 import shutil
 import plistlib
 import subprocess
+import rich
 from pathlib import Path
 
 from opencore_legacy_patcher.volume import generate_copy_arguments
@@ -41,10 +42,8 @@ class GenerateApplication:
         Generate PyInstaller Application
         """
         if self._application_output.exists():
-            print(f"Cleaning existing build: {self._application_output}")
             shutil.rmtree(self._application_output)
 
-        print("Generating OpenCore-Patcher-T2.app")
         _args = self._pyinstaller + ["./OpenCore-Patcher-GUI.spec", "--noconfirm"]
         if self._reset_pyinstaller_cache:
             _args.append("--clean")
@@ -83,11 +82,9 @@ class GenerateApplication:
         Embed analytics key safely into the script
         """
         if not all([self._analytics_key, self._analytics_endpoint]):
-            print("Analyseschlüssel oder Endpunkt nicht angegeben, Einbettung wird übersprungen")
-            print("Analytics key or endpoint not provided, skipping embedding")
+            rich.print("[yellow]Analytics key or endpoint not provided, skipping embedding[/yellow]")
             return
 
-        print("Embedding analytics data safely into source file")
         self._update_analytics_source(self._analytics_key, self._analytics_endpoint)
 
 
@@ -96,7 +93,6 @@ class GenerateApplication:
         Remove analytics key safely from the script
         """
         if all([self._analytics_key, self._analytics_endpoint]):
-            print("Wiping analytics data from source file")
             self._update_analytics_source("", "")
 
 
@@ -109,7 +105,6 @@ class GenerateApplication:
         _find    = b'\x00\x0D\x0A\x00' # 10.13
         _replace = b'\x00\x0A\x0A\x00' # 10.10
 
-        print("Patching LC_VERSION_MIN_MACOSX")
         if not _file.exists():
             raise FileNotFoundError(f"Target binary not found for patching: {_file}")
 
@@ -131,7 +126,6 @@ class GenerateApplication:
         _find    = b'\x00\x01\x0C\x00'
         _replace = b'\x00\x00\x1A\x00'
 
-        print("Patching LC_BUILD_VERSION")
         if not _file.exists():
             raise FileNotFoundError(f"Target binary not found for patching: {_file}")
 
@@ -162,17 +156,17 @@ class GenerateApplication:
             )
             return result.stdout.strip()
         except FileNotFoundError:
-            print("Warning: 'git' executable not found, skipping local commit metadata")
+            rich.print("[yellow]Warning: 'git' executable not found, skipping local commit metadata[/yellow]")
             return ""
         except subprocess.CalledProcessError as e:
             _stderr = (e.stderr or "").strip()
             if "not a git repository" in _stderr.lower():
-                print("Warning: this checkout has no .git directory (likely downloaded as a ZIP/tarball instead of via 'git clone') - Commit Information will show N/A. Use 'git clone' (or 'git pu[...]")
+                rich.print("[yellow]Warning: this checkout has no .git directory (likely downloaded as a ZIP/tarball instead of via 'git clone') - Commit Information will show N/A. Use 'git clone' (or 'git pull')[/yellow]")
             else:
-                print(f"Warning: 'git {' '.join(args)}' failed: {_stderr or e}")
+                rich.print(f"[yellow]Warning: 'git {' '.join(args)}' failed: {_stderr or e}[/yellow]")
             return ""
         except Exception as e:
-            print(f"Warning: 'git {' '.join(args)}' failed: {e}")
+            rich.print(f"[yellow]Warning: 'git {' '.join(args)}' failed: {e}[/yellow]")
             return ""
 
 
@@ -214,10 +208,7 @@ class GenerateApplication:
         _git_commit = self._git_commit_url or _local_commit_url or ""
         _git_commit_date = self._git_commit_date or _local_commit_date or time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
-        if not _git_commit:
-            print("Warning: could not determine a Commit URL (no --git-commit-url passed and no local git metadata found) - Settings will show N/A for it")
 
-        print("Embedding git data")
         if not _file.exists():
             raise FileNotFoundError(f"Info.plist not found: {_file}")
 
@@ -238,7 +229,6 @@ class GenerateApplication:
         """
         Embed resources
         """
-        print("Embedding resources")
         resources_dir = self._application_output / "Contents" / "Resources"
         resources_dir.mkdir(parents=True, exist_ok=True)
 
@@ -351,6 +341,3 @@ class GenerateApplication:
 
         self._embed_git_data()
         self._embed_resources()
-        
-        print("Build-Generierung abgeschlossen.")
-        print("Build generation complete.")
