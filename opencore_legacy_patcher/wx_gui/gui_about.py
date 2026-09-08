@@ -50,6 +50,24 @@ class AboutFrame(wx.Frame):
     <meta charset="utf-8">
 
     <style>
+        :root {{
+            color-scheme: light;
+
+            --background: #ffffff;
+            --foreground: #202124;
+            --muted-foreground: #5f6368;
+            --link: #268bd2;
+            --code-background: #f0f0f0;
+            --border: #999999;
+            --blockquote-border: #cccccc;
+        }}
+
+        html,
+        body {{
+            background: var(--background);
+            color: var(--foreground);
+        }}
+
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
                          sans-serif;
@@ -83,20 +101,48 @@ class AboutFrame(wx.Frame):
             overflow-x: auto;
             padding: 12px;
             border-radius: 6px;
-            background: #f0f0f0;
+            background: var(--code-background);
+            color: var(--foreground);
+        }}
+
+        code {{
+            background: var(--code-background);
+            color: var(--foreground);
         }}
 
         table {{
             border-collapse: collapse;
         }}
 
-        th, td {{
-            border: 1px solid #999;
+        th,
+        td {{
+            border: 1px solid var(--border);
             padding: 6px 10px;
         }}
 
+        blockquote {{
+            margin-left: 0;
+            padding-left: 16px;
+            border-left: 4px solid var(--blockquote-border);
+            color: var(--muted-foreground);
+        }}
+
         a {{
-            color: #268bd2;
+            color: var(--link);
+        }}
+
+        @media (prefers-color-scheme: dark) {{
+            :root {{
+                color-scheme: dark;
+
+                --background: #0d1117;
+                --foreground: #e6edf3;
+                --muted-foreground: #8b949e;
+                --link: #58a6ff;
+                --code-background: #161b22;
+                --border: #30363d;
+                --blockquote-border: #30363d;
+            }}
         }}
     </style>
 </head>
@@ -111,6 +157,7 @@ class AboutFrame(wx.Frame):
         base_url = Path("./README.md").resolve().parent.as_uri() + "/"
 
         self.webview.SetPage(html_document, base_url)
+
 
     def render_markdown(self, text: str):
         # Convert bare GitHub-style task lines into Markdown list items.
