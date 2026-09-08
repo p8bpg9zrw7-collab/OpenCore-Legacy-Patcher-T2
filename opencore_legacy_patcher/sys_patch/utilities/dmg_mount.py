@@ -10,6 +10,12 @@ from pathlib import Path
 from ... import constants
 from ...support import subprocess_wrapper
 
+
+# Fixed passphrase Universal-Binaries.dmg is built with. Not a secret: it ships with
+# the image and only keeps the payload opaque to Finder/Spotlight, so feeding it to
+# hdiutil ourselves loses nothing and spares the user an unexplained system prompt.
+UNIVERSAL_BINARIES_PASSPHRASE = "password"
+
 class PatcherSupportPkgMount:
 
     def __init__(self, global_constants: constants.Constants) -> None:
@@ -65,20 +71,19 @@ class PatcherSupportPkgMount:
         return not ("encrypted: no" in output or "encrypted: 0" in output)
 
     def _display_universal_binaries_password_notice(self) -> None:
-        """Heads-up dialog shown before hdiutil's own passphrase prompt.
+        """Heads-up dialog shown before falling back to hdiutil's own passphrase prompt.
 
-        Universal-Binaries.dmg is encrypted with a fixed passphrase that ships with
-        the Patcher - it is not a secret. hdiutil asks for it through a bare macOS
-        system prompt that names only the disk image and gives no indication of what
-        to type, which reads like an unexplained password request in the middle of
-        root patching. State the passphrase ourselves beforehand so the prompt is
-        answerable.
+        Only reached when the built-in passphrase did not unlock the image. hdiutil
+        then asks for it through a bare macOS system prompt that names only the disk
+        image and gives no indication of what to type, which reads like an
+        unexplained password request in the middle of root patching. State the
+        passphrase ourselves beforehand so the prompt is answerable.
         """
         if self.constants.cli_mode is True:
             return
         try:
             applescript.AppleScript(
-                f'display dialog "OpenCore Legacy Patcher is about to mount Universal-Binaries.dmg.\\n\\nmacOS will ask for the password of this disk image. The password is:\\n\\npassword" buttons {{"OK"}} default button "OK" with title "OpenCore Legacy Patcher" with icon file "{self.icon_path}"'
+                f'display dialog "OpenCore Legacy Patcher could not unlock Universal-Binaries.dmg automatically.\\n\\nIf macOS asks for a password for this disk image, the password is:\\n\\n{UNIVERSAL_BINARIES_PASSPHRASE}" buttons {{"OK"}} default button "OK" with title "OpenCore Legacy Patcher" with icon file "{self.icon_path}"'
             ).run()
         except Exception:
             logging.info("- Failed to display Universal-Binaries.dmg password notice")
@@ -91,20 +96,34 @@ class PatcherSupportPkgMount:
             logging.exception("Stack Trace:")
             return False
 
-        if self._is_encrypted(dmg_path):
-            self._display_universal_binaries_password_notice()
+        mount_point = Path(self.constants.payload_path / "Universal-Binaries")
+        shadow_path = Path(self.constants.payload_path / "Universal-Binaries_overlay")
 
+        # Supply the passphrase ourselves rather than letting hdiutil put up its own
+        # prompt. Skipped for unencrypted images: -stdinpass on those is pointless.
         output = self._run_hdiutil(
-            dmg_path,
-            Path(self.constants.payload_path / "Universal-Binaries"),
-            shadow_path=Path(self.constants.payload_path / "Universal-Binaries_overlay"),
+            dmg_path, mount_point, shadow_path=shadow_path,
+            password=UNIVERSAL_BINARIES_PASSPHRASE if self._is_encrypted(dmg_path) else None,
             retry_on_auth_error=True
         )
 
         if output.returncode != 0:
-            logging.info("- Failed to mount Universal-Binaries.dmg")
+            logging.info("- Failed to mount Universal-Binaries.dmg, retrying with interactive passphrase entry")
             subprocess_wrapper.log(output)
-            return False
+
+            # Fall back to hdiutil asking the user directly - covers an image built
+            # with a different passphrase than the one hardcoded above. Tell them
+            # what to type first, otherwise the system prompt is unanswerable.
+            self._display_universal_binaries_password_notice()
+            output = self._run_hdiutil(
+                dmg_path, mount_point, shadow_path=shadow_path,
+                retry_on_auth_error=True
+            )
+
+            if output.returncode != 0:
+                logging.info("- Failed to mount Universal-Binaries.dmg")
+                subprocess_wrapper.log(output)
+                return False
 
         logging.info("- Mounted Universal-Binaries.dmg")
         return True
