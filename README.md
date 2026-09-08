@@ -177,6 +177,10 @@ To run the project from source, see here: [Build and run from source](./SOURCE.m
     * iMacs Metal GPUs Upgrade Patch set and documentation
 * [nxvid](https://github.com/nxvid/OpenCore-Legacy-Patcher-T2/)
     * for documenting and fixing an issue where sbvmm might not have been injected on T2 Macs
+
+* [Matteo](https://github.com/Medelcartelinc)
+    * Adding support for T1 Macs on Tahoe
+    * fixing some bugs, testing and documenting issues
 * [gandolf243](https://github.com/gandolf243)
     * UI redesign
     * fixing some bugs, testing and documenting issues
