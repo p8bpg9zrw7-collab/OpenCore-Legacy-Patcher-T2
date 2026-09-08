@@ -342,6 +342,112 @@ def osascript(cmd_args, **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(["/usr/bin/osascript", "-e", apple_script], **kwargs)
 
 
+def applescript_icon_clause(icon_path) -> str:
+    """
+    Build the 'with icon POSIX file "..."' fragment for a 'display dialog' call.
+
+    Two things this deliberately does NOT do, both of which used to break dialogs:
+
+      1. It does not hand AppleScript an HFS path. The previous form,
+         str(icon_path).replace("/", ":")[1:], produced "Users:me:...icns" - an HFS
+         path whose first component is read as the VOLUME name, so it resolved
+         against a non-existent volume "Users". 'with icon POSIX file "/Users/..."'
+         takes the POSIX path as-is.
+      2. It does not reference a file that isn't there. A missing icon makes
+         'display dialog' raise, and every caller here wraps that in a try/except -
+         so a cosmetic problem silently swallows the whole dialog. Where that dialog
+         is how we collect an administrator password, the result is a mount that
+         fails with no prompt ever shown. Returning an empty clause loses the icon
+         and keeps the dialog.
+
+    Returns:
+        str: the clause including its leading space, or "" if no usable icon exists.
+    """
+    try:
+        path = Path(icon_path)
+        if not path.is_file():
+            logging.warning(f"Dialog icon missing, continuing without it: {path}")
+            return ""
+    except Exception:
+        return ""
+
+    # A quote or backslash would break out of the AppleScript string literal.
+    # Nothing in our own bundle contains either; drop the icon rather than
+    # building a script we cannot escape correctly.
+    if '"' in str(path) or "\\" in str(path):
+        logging.warning("Dialog icon path contains characters that cannot be quoted, continuing without it")
+        return ""
+
+    return f' with icon POSIX file "{path}"'
+
+
+def request_admin_password(icon_path=None, message: str = "OpenCore Legacy Patcher requires administrator access to mount patch resources.") -> str:
+    """
+    Prompt for the local administrator password via a plain dialog.
+
+    Deliberately NOT routed through "do shell script ... with administrator
+    privileges": that mechanism runs the elevated command via
+    /usr/libexec/security_authtrampoline, a process detached from the current
+    login/Aqua session. hdiutil's own internal authentication (DIHelperAgentMaster)
+    appears to depend on that session being present, so a hdiutil invocation
+    elevated via the trampoline can fail with "hdiutil: attach failed -
+    Authentication error" even though the same command run under sudo from a
+    session-bound process succeeds. A plain "display dialog" only needs a
+    WindowServer session to render, so we use it purely to collect the password
+    and feed it to sudo ourselves.
+
+    A failure to even show the dialog is logged rather than swallowed: silently
+    returning "" here reads downstream as "user cancelled" and aborts elevation,
+    which previously turned any dialog problem into an unexplained mount failure.
+
+    Returns:
+        str: the password, or "" if cancelled or the dialog could not be shown.
+    """
+    import applescript
+
+    script = (
+        f'set theResult to display dialog "{message}" default answer "" with hidden answer '
+        f'with title "OpenCore Legacy Patcher"{applescript_icon_clause(icon_path)}\n'
+        'return the text returned of theResult'
+    )
+
+    try:
+        return applescript.AppleScript(script).run() or ""
+    except Exception as error:
+        # -128 is AppleScript's "User canceled" - expected, not a fault.
+        if "-128" in str(error):
+            logging.info("Administrator password prompt cancelled by user")
+        else:
+            logging.error(f"Failed to display administrator password prompt: {error}")
+        return ""
+
+
+def _sudo_will_prompt() -> bool:
+    """
+    Whether 'sudo -k' would actually ask for a password on this machine.
+
+    Matters because mount_dmg() feeds sudo and hdiutil from the same stdin: the
+    first line is consumed by sudo's prompt, the rest is handed to hdiutil's
+    -stdinpass. If sudo does not prompt (a NOPASSWD sudoers rule - which '-k' does
+    NOT override, it only clears the credential timestamp), that first line falls
+    through to hdiutil and is tried as the image passphrase, producing an
+    authentication failure that looks nothing like its actual cause.
+
+    Returns:
+        bool: True if a password line should be sent, False if sudo runs unprompted.
+    """
+    try:
+        result = subprocess.run(
+            ["/usr/bin/sudo", "-k", "-n", "-v"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=15
+        )
+    except Exception:
+        # Assume a prompt: sending a password line sudo did not want is recoverable
+        # via the caller's retry, withholding one it did want hangs on EOF.
+        return True
+    return result.returncode != 0
+
+
 def mount_dmg(
     dmg_path: Path,
     mount_point: Path,
@@ -400,36 +506,54 @@ def mount_dmg(
     if process.returncode == 0 or admin_password_prompt is None:
         return subprocess.CompletedProcess(args=cmd, returncode=process.returncode, stdout=stdout)
 
-    _should_retry = b"Permission denied" in stdout or (retry_on_auth_error and b"Authentication error" in stdout)
+    # EACCES is not the only shape this takes: the same gate has also surfaced as
+    # EPERM ("Operation not permitted"). Match both.
+    _privilege_error = b"Permission denied" in stdout or b"Operation not permitted" in stdout
+    _auth_error = retry_on_auth_error and b"Authentication error" in stdout
+
+    # These strings are not a stable interface, and LC_ALL only reaches hdiutil's
+    # POSIX-level messages - the DiskImages framework localises via AppleLanguages,
+    # so a non-English system can produce a failure none of the matches above catch.
+    # When the caller passed a fixed, known-correct passphrase (retry_on_auth_error),
+    # a wrong password is not a plausible explanation for the failure, so fall back
+    # to retrying elevated on ANY error rather than giving up on a string mismatch.
+    # The cost of being wrong is one superfluous password prompt; the cost of not
+    # retrying is root patching that cannot start at all.
+    _should_retry = _privilege_error or _auth_error or retry_on_auth_error
     if not _should_retry:
         return subprocess.CompletedProcess(args=cmd, returncode=process.returncode, stdout=stdout)
 
-    logging.info("- Unprivileged hdiutil attach denied, retrying with administrator privileges")
+    logging.info("- Unprivileged hdiutil attach failed, retrying with administrator privileges")
 
-    admin_password = admin_password_prompt()
-    if not admin_password:
-        logging.info("- Elevated hdiutil attach cancelled (no administrator password provided)")
-        return subprocess.CompletedProcess(args=cmd, returncode=process.returncode, stdout=stdout)
+    _needs_admin_password = _sudo_will_prompt()
+    admin_password = ""
+    if _needs_admin_password:
+        admin_password = admin_password_prompt()
+        if not admin_password:
+            logging.info("- Elevated hdiutil attach cancelled (no administrator password provided)")
+            return subprocess.CompletedProcess(args=cmd, returncode=process.returncode, stdout=stdout)
 
     # Clear com.apple.quarantine before attaching: a quarantined disk image (e.g. a
     # freshly rebuilt/re-extracted payload) can trip hdiutil's authentication gate
     # even when run as root - elevating privileges alone does not clear it. Run it
     # in the same elevated shell as the actual attach so it always has the rights to.
     elevated_shell = (
+        # sudo resets the environment (env_reset), so LC_ALL set for the unprivileged
+        # attempt does not survive into this one. Re-export it here.
+        "export LC_ALL=C; "
         f"xattr -d com.apple.quarantine {shlex.quote(str(dmg_path))} 2>/dev/null; "
         + " ".join(shlex.quote(str(arg)) for arg in cmd)
     )
-    # '-k' invalidates any cached sudo credentials so that sudo ALWAYS prompts and
-    # therefore always consumes exactly one line from stdin. Without it, a cached
-    # timestamp (or a NOPASSWD rule) makes sudo read nothing, and the administrator
-    # password is then fed straight to hdiutil's -stdinpass as the image passphrase -
-    # producing an authentication failure that looks nothing like its actual cause.
+    # '-k' clears any cached sudo credential timestamp, so a previous sudo in this
+    # session cannot silently change how much of stdin sudo consumes. It does NOT
+    # force a prompt where sudoers says NOPASSWD - that case is handled by asking
+    # sudo up front (_sudo_will_prompt) and sending no password line at all.
     elevated_cmd = ["/usr/bin/sudo", "-S", "-k", "/bin/sh", "-c", elevated_shell]
 
     elevated_process = subprocess.Popen(elevated_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
     # sudo -S reads exactly one line from stdin for its own password, then hands the
     # remaining, still-open stdin through to the shell (and on to hdiutil's -stdinpass)
-    stdin_payload = admin_password + "\n" + (password or "")
+    stdin_payload = (admin_password + "\n" if _needs_admin_password else "") + (password or "")
     elevated_stdout, _ = elevated_process.communicate(input=stdin_payload.encode())
 
     if elevated_process.returncode == 0:
